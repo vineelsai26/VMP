@@ -1,5 +1,6 @@
 const std = @import("std");
 const clap = @import("clap");
+const vmp_install = @import("install.zig");
 
 const io = std.io;
 const print = std.debug.print;
@@ -9,12 +10,12 @@ pub fn main() !void {
     defer _ = gpa.deinit();
 
     const params = comptime clap.parseParamsComptime(
-        \\-h, --help                        Display this help and exit.
-        \\-i, --install <str>...            Install
-        \\-u, --use <str>...
-        \\-r, --uninstall <str>...
-        \\<str>...
-        \\
+        \\-h, --help                        Display help and exit.
+        \\-v, --version                     Display Version Number and exit.
+        \\-i, --install <str>...            Install Python version
+        \\-u, --use <str>...                Use Python version
+        \\-r, --uninstall <str>...          Uninstall Python version
+        \\-l, --list <str>...               List all available python versions
     );
 
     var diag = clap.Diagnostic{};
@@ -30,10 +31,17 @@ pub fn main() !void {
 
     if (res.args.help != 0)
         print("--help\n", .{});
-    for (res.args.install) |n|
-        print("install = {s}\n", .{n});
+    for (res.args.install) |n| {
+        const version = clap.parsers.string(n) catch |err| {
+            print("{s}", .{err});
+            return;
+        };
+        try vmp_install.install(version);
+    }
     for (res.args.use) |n|
-        print("install = {s}\n", .{n});
-    for (res.args.install) |n|
-        print("install = {s}\n", .{n});
+        print("use = {s}\n", .{n});
+    for (res.args.uninstall) |n|
+        print("uninstall = {s}\n", .{n});
+    for (res.args.list) |n|
+        print("list = {s}\n", .{n});
 }
