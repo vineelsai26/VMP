@@ -1,14 +1,39 @@
 const std = @import("std");
+const clap = @import("clap");
+
+const io = std.io;
+const print = std.debug.print;
 
 pub fn main() !void {
-    const args = std.os.argv[1..std.os.argv.len];
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
 
-    const arg = args[0][0..8];
-    const install_arg: []const u8 = "install";
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help                        Display this help and exit.
+        \\-i, --install <str>...            Install
+        \\-u, --use <str>...
+        \\-r, --uninstall <str>...
+        \\<str>...
+        \\
+    );
 
-    std.debug.print("{s}, {s}\n", .{ arg, install_arg });
+    var diag = clap.Diagnostic{};
+    var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
+        .diagnostic = &diag,
+        .allocator = gpa.allocator(),
+    }) catch |err| {
+        // Report useful error and exit
+        diag.report(io.getStdErr().writer(), err) catch {};
+        return err;
+    };
+    defer res.deinit();
 
-    if (std.mem.eql(u8, arg, install_arg)) {
-        std.debug.print("{s}\n", .{args[0]});
-    }
+    if (res.args.help != 0)
+        print("--help\n", .{});
+    for (res.args.install) |n|
+        print("install = {s}\n", .{n});
+    for (res.args.use) |n|
+        print("install = {s}\n", .{n});
+    for (res.args.install) |n|
+        print("install = {s}\n", .{n});
 }
