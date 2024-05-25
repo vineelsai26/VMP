@@ -1,6 +1,8 @@
+use futures_util::StreamExt;
+use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::{self, header::USER_AGENT};
 use serde::{Deserialize, Serialize};
-use std::process::exit;
+use std::{cmp::min, fs::File, io::Write, process::exit};
 
 fn help() {
     println!("Usage: vmn python <command> [version]
@@ -74,6 +76,40 @@ async fn get_latest_minor_of_version(
     panic!("Unable to find suitable version");
 }
 
+async fn download_file(url: String, file_path: String) -> Result<(), Box<dyn std::error::Error>> {
+    let res = reqwest::get(url.clone()).await?;
+
+    let download_size = res.content_length().expect("");
+
+    let pb = ProgressBar::new(download_size);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("{msg}\n{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")?
+            .progress_chars("#>-")
+    );
+    pb.set_message("Downloading ".to_string() + &url);
+
+    // let mut data = Cursor::new(res.bytes().await?);
+    // let mut out = File::create(file_path).expect("failed to create file");
+    // copy(&mut data, &mut out).expect("failed to copy content");
+
+    let mut file = File::create(file_path.clone())
+        .or(Err(format!("Failed to create file '{}'", file_path)))?;
+    let mut downloaded: u64 = 0;
+    let mut stream = res.bytes_stream();
+
+    while let Some(item) = stream.next().await {
+        let chunk = item.or(Err(format!("Error while downloading file")))?;
+        file.write_all(&chunk)
+            .or(Err(format!("Error while writing to file")))?;
+        let new = min(downloaded + (chunk.len() as u64), download_size);
+        downloaded = new;
+        pb.set_position(new);
+    }
+
+    Ok(())
+}
+
 async fn install_python(mut version: String) -> Result<(), Box<dyn std::error::Error>> {
     let version_string = version.split(".").filter(|&i| i != "").collect::<Vec<_>>();
 
@@ -92,7 +128,18 @@ async fn install_python(mut version: String) -> Result<(), Box<dyn std::error::E
         panic!("error invalid version number")
     }
 
-    println!("{:?}", version);
+    println!("Installing Python Version {:?}", version);
+
+    let url = "https://www.python.org/ftp/python/".to_owned()
+        + &version.replace("v", "")
+        + "/Python-"
+        + &version.replace("v", "")
+        + ".tgz";
+
+    println!("Downloading Python from {:?}", url);
+
+    let file_path = url.split("/").last().unwrap().to_string();
+    download_file(url, file_path.clone()).await?;
 
     Ok(())
 }
