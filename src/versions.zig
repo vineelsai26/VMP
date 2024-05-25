@@ -9,7 +9,7 @@ const ResponseStorage = std.http.Client.FetchOptions.ResponseStorage;
 const FetchOptions = std.http.Client.FetchOptions;
 const Location = std.http.Client.FetchOptions.Location;
 
-pub fn fetchPythonVersions() !void {
+pub fn fetchPythonVersions(gpa: std.mem.Allocator) ![]VersionResponse {
     const allocator = std.heap.page_allocator;
     var client = std.http.Client{
         .allocator = allocator,
@@ -34,17 +34,32 @@ pub fn fetchPythonVersions() !void {
     print("{any}\n", .{req.status});
 
     const parseOpts = .{ .ignore_unknown_fields = true };
-    const data = try json.parseFromSliceLeaky(VersionResponse, allocator, response_raw.items, parseOpts);
+    const data = try json.parseFromSliceLeaky(
+        []VersionResponse,
+        allocator,
+        response_raw.items,
+        parseOpts,
+    );
 
-    print("{any}", .{data.len});
+    var versionResponse = std.ArrayList(VersionResponse).init(gpa);
+
+    print("{any}\n", .{data.len});
 
     for (data) |item| {
         const out: []u8 = try allocator.alloc(u8, item.ref.len - 10);
         _ = std.mem.replace(u8, item.ref, "refs/tags/", "", out);
-        print("{s}\n", .{out});
+
+        versionResponse.append(VersionResponse{ .ref = out }) catch |err| {
+            print("{any}", .{err});
+            continue;
+        };
     }
+
+    print("{s}", .{versionResponse.items[0].ref});
+
+    return versionResponse.items;
 }
 
-const VersionResponse = []struct {
+const VersionResponse = struct {
     ref: []const u8,
 };

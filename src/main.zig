@@ -36,7 +36,7 @@ pub fn main() !void {
             print("{s}", .{err});
             return;
         };
-        try vmp_install.install(version);
+        try vmp_install.install(gpa.allocator(), version);
     }
     for (res.args.use) |n|
         print("use = {s}\n", .{n});
