@@ -1,8 +1,17 @@
+use flate2::read::GzDecoder;
 use futures_util::StreamExt;
+use homedir::get_my_home;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::{self, header::USER_AGENT};
 use serde::{Deserialize, Serialize};
-use std::{cmp::min, fs::File, io::Write, process::exit};
+use std::{
+    cmp::min,
+    fs::File,
+    io::Write,
+    path::Path,
+    process::{exit, Command},
+};
+use tar::Archive;
 
 fn help() {
     println!("Usage: vmn python <command> [version]
@@ -110,6 +119,28 @@ async fn download_file(url: String, file_path: String) -> Result<(), Box<dyn std
     Ok(())
 }
 
+fn extract_tar_gz(source: String, dest: String, prefix: String) -> Result<(), std::io::Error> {
+    let tar_gz = File::open(source)?;
+    let tar = GzDecoder::new(tar_gz);
+    let mut archive = Archive::new(tar);
+
+    // let _ = archive.unpack(dest);
+
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?;
+
+        let stripped_path = path.strip_prefix(&prefix).unwrap();
+        // let mut dst = File::create(&stripped_path)?;
+        let dst = dest.clone() + "/" + stripped_path.to_str().unwrap();
+
+        println!("{:?}", dst);
+        _ = entry.unpack(dst);
+    }
+
+    Ok(())
+}
+
 async fn install_python(mut version: String) -> Result<(), Box<dyn std::error::Error>> {
     let version_string = version.split(".").filter(|&i| i != "").collect::<Vec<_>>();
 
@@ -138,8 +169,48 @@ async fn install_python(mut version: String) -> Result<(), Box<dyn std::error::E
 
     println!("Downloading Python from {:?}", url);
 
-    let file_path = url.split("/").last().unwrap().to_string();
-    download_file(url, file_path.clone()).await?;
+    let vmp_path = get_my_home().unwrap().unwrap().as_path().join(".vmp");
+    let download_cache_path = vmp_path.join("cache");
+    let _ = std::fs::create_dir_all(download_cache_path.clone());
+    let file_name = url.split("/").last().unwrap().to_string();
+    let file_path = download_cache_path
+        .join(file_name.clone())
+        .to_str()
+        .unwrap()
+        .to_string(); // TODO: too crazy fix it
+
+    let already_downloaded = Path::new(&file_path).exists();
+    if !already_downloaded {
+        download_file(url, file_path.clone()).await?;
+    } else {
+        println!(
+            "File already exists using already downloaded file from {:?}",
+            file_path
+        )
+    }
+
+    let extract_path = download_cache_path
+        .join(version.clone())
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let _ = std::fs::create_dir_all(extract_path.clone());
+    let _ = extract_tar_gz(
+        file_path,
+        extract_path.clone(),
+        file_name.replace(".tgz", ""),
+    );
+
+    let install_path = vmp_path.join("python").join(version).to_str().unwrap().to_string();
+
+    let build_args = format!("--prefix={} --enable-optimizations && make && make altinstall", install_path);
+
+    println!("{:?}", extract_path);
+
+    let _ = Command::new("bash")
+        .arg("-c")
+        .arg(format!("cd {} && ./configure {}", extract_path, build_args)).spawn().unwrap().wait();
 
     Ok(())
 }

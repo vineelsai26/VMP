@@ -4,8 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+homedir = { version = "0.2.1" }
 tokio = { version = "1.37.0", features = ["full"] }
 reqwest = { version = "0.12.4", features = ["json", "stream"] }
 serde = { version = "1.0.202", features = ["derive"] }
-indicatif = {version = "0.17.8", features = ["rayon"]}
+indicatif = { version = "0.17.8", features = ["rayon"] }
 futures-util = { version = "0.3.30" }
+flate2 = { version = "1.0" }
+tar = { version = "0.4" }
