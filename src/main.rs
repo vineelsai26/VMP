@@ -14,27 +14,23 @@ use std::{
 use tar::Archive;
 
 fn help() {
-    println!("Usage: vmn python <command> [version]
+    println!("Usage: vmp <command> [version]
 Commands:
-	python install [version]        			Install a specific version of python or latest or lts version of python (default: lts)
-	python use [version]            			Use a specific version of python
-	python list [type]              			List all versions, installed versions or lts versions
-	python uninstall [version]      			Uninstall a specific version of python
-	python help                     			Print this help section
+	install [version]        			Install a specific version of python or latest or lts version of python (default: lts)
+	use [version]            			Use a specific version of python
+	list [type]              			List all versions, installed versions or lts versions
+	uninstall [version]      			Uninstall a specific version of python
+	help                     			Print this help section
 Examples:
-	vmn python install latest       			Install the latest version of python
-	vmn python use latest           			Use the latest version of python
-	vmn python install 3.11         			Install a specific version of python
-	vmn python use 3.11		          			Use a specific version of python
-	vmn python list all             			List all versions of python
-	vmn python list installed       			List installed versions of python
-	vmn python uninstall all        			Uninstall all versions of python
-	vmn python help                 			Print this help");
+	vmp install latest       			Install the latest version of python
+	vmp use latest           			Use the latest version of python
+	vmp install 3.11         			Install a specific version of python
+	vmp use 3.11		          			Use a specific version of python
+	vmp list all             			List all versions of python
+	vmp list installed       			List installed versions of python
+	vmp uninstall all        			Uninstall all versions of python
+	vmp help                 			Print this help");
     exit(0);
-}
-
-fn use_python(version: String) {
-    println!("{:?}", version);
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -97,10 +93,6 @@ async fn download_file(url: String, file_path: String) -> Result<(), Box<dyn std
             .progress_chars("#>-")
     );
     pb.set_message("Downloading ".to_string() + &url);
-
-    // let mut data = Cursor::new(res.bytes().await?);
-    // let mut out = File::create(file_path).expect("failed to create file");
-    // copy(&mut data, &mut out).expect("failed to copy content");
 
     let mut file = File::create(file_path.clone())
         .or(Err(format!("Failed to create file '{}'", file_path)))?;
@@ -202,17 +194,103 @@ async fn install_python(mut version: String) -> Result<(), Box<dyn std::error::E
         file_name.replace(".tgz", ""),
     );
 
-    let install_path = vmp_path.join("python").join(version).to_str().unwrap().to_string();
+    let install_path = vmp_path
+        .join("python")
+        .join(version)
+        .to_str()
+        .unwrap()
+        .to_string();
 
-    let build_args = format!("--prefix={} --enable-optimizations && make && make altinstall", install_path);
+    let build_args = format!(
+        "--prefix={} --enable-optimizations && make && make altinstall",
+        install_path
+    );
 
     println!("{:?}", extract_path);
 
     let _ = Command::new("bash")
         .arg("-c")
-        .arg(format!("cd {} && ./configure {}", extract_path, build_args)).spawn().unwrap().wait();
+        .arg(format!("cd {} && ./configure {}", extract_path, build_args))
+        .spawn()
+        .unwrap()
+        .wait();
 
     Ok(())
+}
+
+async fn use_python(mut version: String) -> Result<(), Box<dyn std::error::Error>> {
+    let version_string = version.split(".").filter(|&i| i != "").collect::<Vec<_>>();
+
+    if version_string.len() == 1 {
+        version =
+            get_latest_minor_of_version(version_string[0].to_string(), "".to_string()).await?;
+    } else if version_string.len() == 2 {
+        version = get_latest_minor_of_version(
+            version_string[0].to_string(),
+            version_string[1].to_string(),
+        )
+        .await?;
+    } else if version_string.len() == 3 {
+        version = version
+    } else {
+        panic!("error invalid version number")
+    }
+
+    println!("Using Python Version {:?}", version);
+
+    let vmp_path = get_my_home().unwrap().unwrap().as_path().join(".vmp");
+    let _ = std::fs::create_dir_all(vmp_path.clone());
+
+    let vmp_python_version = vmp_path
+        .join("python_version")
+        .to_str()
+        .unwrap()
+        .to_string();
+    let mut file = File::create(vmp_python_version)?;
+    file.write_all(version.as_bytes())?;
+
+    Ok(())
+}
+
+fn posix_env() {
+    let env = r###"
+export PATH="$(cat $HOME/.vmp/python_version):$PATH"
+
+function vmp {
+    $(whereis vmp | cut -d" " -f2) $@
+    if [[ "$1" == "use" ]]
+	then
+        export PATH="$(cat $HOME/.vmp/python_version):$PATH"
+	fi
+}
+
+function setPythonVersion {
+	if [ -f .python-version ]
+	then
+		echo "Found .python-version file"
+		if [ -d $HOME/.vmp/python/v$(ls "$HOME/.vmp/python" 2> /dev/null | grep "$(cat .python-version)" | tail -1 | cut -f2 -d"v")/bin ]
+		then
+			export PATH="$HOME/.vmp/python/v$(ls "$HOME/.vmp/python" 2> /dev/null | grep "$(cat .python-version)" | tail -1 | cut -f2 -d"v")/bin:$PATH"
+		else
+			vmp --compile python install $(cat .python-version)
+			export PATH="$HOME/.vmp/python/v$(ls "$HOME/.vmp/python" 2> /dev/null | grep "$(cat .python-version)" | tail -1 | cut -f2 -d"v")/bin:$PATH"
+		fi
+
+		if [[ $(ls "$HOME/.vmp/python" 2> /dev/null | grep "$(cat .python-version)" | tail -1) != "" ]]; then
+			echo "Using python version v$(ls "$HOME/.vmp/python" 2> /dev/null | grep "$(cat .python-version)" | tail -1 | cut -f2 -d"v")"
+		fi
+	fi
+}
+
+function cd {
+	builtin cd "$@"
+	setPythonVersion
+}
+
+setPythonVersion
+"###;
+
+    println!("{:?}", env);
 }
 
 #[tokio::main]
@@ -228,8 +306,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("setup");
         exit(0);
     } else if cmd == "env" {
-        println!("env");
-        exit(0);
+        posix_env();
+        exit(0)
     }
 
     let version = std::env::args().nth(2).expect("Not enough args");
@@ -237,7 +315,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if cmd == "install" {
         install_python(version).await?;
     } else if cmd == "use" {
-        use_python(version);
+        use_python(version).await?;
     }
 
     Ok(())
