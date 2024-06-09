@@ -134,6 +134,7 @@ fn extract_tar_gz(source: String, dest: String, prefix: String) -> Result<(), st
 }
 
 async fn install_python(mut version: String) -> Result<(), Box<dyn std::error::Error>> {
+    version = version.replace("v", "");
     let version_string = version.split(".").filter(|&i| i != "").collect::<Vec<_>>();
 
     if version_string.len() == 1 {
@@ -151,15 +152,15 @@ async fn install_python(mut version: String) -> Result<(), Box<dyn std::error::E
         panic!("error invalid version number")
     }
 
-    println!("Installing Python Version {:?}", version);
+    if !version.contains("v") {
+        version = "v".to_owned() + &version
+    }
 
     let url = "https://www.python.org/ftp/python/".to_owned()
         + &version.replace("v", "")
         + "/Python-"
         + &version.replace("v", "")
         + ".tgz";
-
-    println!("Downloading Python from {:?}", url);
 
     let vmp_path = get_my_home().unwrap().unwrap().as_path().join(".vmp");
     let download_cache_path = vmp_path.join("cache");
@@ -169,17 +170,7 @@ async fn install_python(mut version: String) -> Result<(), Box<dyn std::error::E
         .join(file_name.clone())
         .to_str()
         .unwrap()
-        .to_string(); // TODO: too crazy fix it
-
-    let already_downloaded = Path::new(&file_path).exists();
-    if !already_downloaded {
-        download_file(url, file_path.clone()).await?;
-    } else {
-        println!(
-            "File already exists using already downloaded file from {:?}",
-            file_path
-        )
-    }
+        .to_string();
 
     let extract_path = download_cache_path
         .join(version.clone())
@@ -187,16 +178,9 @@ async fn install_python(mut version: String) -> Result<(), Box<dyn std::error::E
         .unwrap()
         .to_string();
 
-    let _ = std::fs::create_dir_all(extract_path.clone());
-    let _ = extract_tar_gz(
-        file_path,
-        extract_path.clone(),
-        file_name.replace(".tgz", ""),
-    );
-
     let install_path = vmp_path
         .join("python")
-        .join(version)
+        .join(version.clone())
         .to_str()
         .unwrap()
         .to_string();
@@ -206,19 +190,44 @@ async fn install_python(mut version: String) -> Result<(), Box<dyn std::error::E
         install_path
     );
 
-    println!("{:?}", extract_path);
+    println!("Installing Python Version {} at {}", version, extract_path);
 
-    let _ = Command::new("bash")
-        .arg("-c")
-        .arg(format!("cd {} && ./configure {}", extract_path, build_args))
-        .spawn()
-        .unwrap()
-        .wait();
+    let vmp_python_bin_path = vmp_path.join("python").join(version.clone()).join("bin");
+
+    if vmp_python_bin_path.exists() {
+        println!("Python version {} already installed", version)
+    } else {
+        let already_downloaded = Path::new(&file_path).exists();
+        if !already_downloaded {
+            println!("Downloading Python from {:?}", url);
+            download_file(url, file_path.clone()).await?;
+        } else {
+            println!(
+                "File already exists using already downloaded file from {:?}",
+                file_path
+            )
+        }
+
+        let _ = std::fs::create_dir_all(extract_path.clone());
+        let _ = extract_tar_gz(
+            file_path,
+            extract_path.clone(),
+            file_name.replace(".tgz", ""),
+        );
+
+        let _ = Command::new("bash")
+            .arg("-c")
+            .arg(format!("cd {} && ./configure {}", extract_path, build_args))
+            .spawn()
+            .unwrap()
+            .wait();
+    }
 
     Ok(())
 }
 
 async fn use_python(mut version: String) -> Result<(), Box<dyn std::error::Error>> {
+    version = version.replace("v", "");
     let version_string = version.split(".").filter(|&i| i != "").collect::<Vec<_>>();
 
     if version_string.len() == 1 {
@@ -236,7 +245,9 @@ async fn use_python(mut version: String) -> Result<(), Box<dyn std::error::Error
         panic!("error invalid version number")
     }
 
-    println!("Using Python Version {:?}", version);
+    if !version.contains("v") {
+        version = "v".to_owned() + &version
+    }
 
     let vmp_path = get_my_home().unwrap().unwrap().as_path().join(".vmp");
     let _ = std::fs::create_dir_all(vmp_path.clone());
@@ -247,20 +258,31 @@ async fn use_python(mut version: String) -> Result<(), Box<dyn std::error::Error
         .unwrap()
         .to_string();
     let mut file = File::create(vmp_python_version)?;
-    file.write_all(version.as_bytes())?;
+
+    let vmp_path_python_path = vmp_path.join("python").join(version.clone()).join("bin");
+
+    if vmp_path_python_path.exists() {
+        println!("Using Python Version {:?}", version);
+        file.write_all(version.as_bytes())?;
+    } else {
+        println!(
+            "Python version {} not installed, please install it with command \n `vmp install {}`",
+            version, version
+        )
+    }
 
     Ok(())
 }
 
 fn posix_env() {
     let env = r###"
-export PATH="$(cat $HOME/.vmp/python_version):$PATH"
+export PATH="$HOME/.vmp/python/$(cat $HOME/.vmp/python_version)/bin:$PATH"
 
 function vmp {
     $(whereis vmp | cut -d" " -f2) $@
     if [[ "$1" == "use" ]]
 	then
-        export PATH="$(cat $HOME/.vmp/python_version):$PATH"
+        export PATH="$HOME/.vmp/python/$(cat $HOME/.vmp/python_version)/bin:$PATH"
 	fi
 }
 
@@ -290,7 +312,7 @@ function cd {
 setPythonVersion
 "###;
 
-    println!("{:?}", env);
+    println!("{}", env);
 }
 
 #[tokio::main]
@@ -301,9 +323,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         help()
     } else if cmd == "version" {
         println!("dev");
-        exit(0);
-    } else if cmd == "setup" {
-        println!("setup");
         exit(0);
     } else if cmd == "env" {
         posix_env();
