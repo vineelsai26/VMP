@@ -1,7 +1,7 @@
 mod python;
 mod utils;
 
-use python::{env::posix_env, install::install_python, usage::use_python};
+use python::{env::posix_env, install::install_python, list::list_python_versions, usage::use_python};
 use std::process::exit;
 
 fn help() {
@@ -44,6 +44,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         install_python(version).await?;
     } else if cmd == "use" {
         use_python(version).await?;
+    } else if cmd == "list" {
+        list_python_versions(version).await?;
     }
 
     Ok(())
