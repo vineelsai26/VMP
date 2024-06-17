@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install zip
+      - name: Install packages
         run: sudo apt install libssl-dev
 
       - uses: actions-rs/toolchain@v1
@@ -45,16 +45,16 @@ jobs:
             cp target/release/vmp vmp
             tar -czvf vmp-linux-amd64.tar.gz vmp
 
-      - uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: build
-          args: --release --all-features --target aarch64-unknown-linux-gnu
+    #   - uses: actions-rs/cargo@v1
+    #     with:
+    #       use-cross: true
+    #       command: build
+    #       args: --release --all-features --target aarch64-unknown-linux-gnu
 
-      - name: "Bundle Linux ARM64"
-        run: |
-            cp target/release/vmp vmp
-            tar -czvf vmp-linux-arm64.tar.gz vmp
+    #   - name: "Bundle Linux ARM64"
+    #     run: |
+    #         cp target/release/vmp vmp
+    #         tar -czvf vmp-linux-arm64.tar.gz vmp
 
       - uses: actions-rs/cargo@v1
         with:
