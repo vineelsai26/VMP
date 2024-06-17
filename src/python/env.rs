@@ -18,7 +18,7 @@ function setPythonVersion {
 		then
 			export PATH="$HOME/.vmp/python/v$(ls "$HOME/.vmp/python" 2> /dev/null | grep "$(cat .python-version)" | tail -1 | cut -f2 -d"v")/bin:$PATH"
 		else
-			vmp --compile python install $(cat .python-version)
+			vmp install $(cat .python-version)
 			export PATH="$HOME/.vmp/python/v$(ls "$HOME/.vmp/python" 2> /dev/null | grep "$(cat .python-version)" | tail -1 | cut -f2 -d"v")/bin:$PATH"
 		fi
 

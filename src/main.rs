@@ -1,8 +1,12 @@
 mod python;
 mod utils;
 
-use python::{env::posix_env, install::install_python, list::list_python_versions, usage::use_python};
+use python::{
+    env::posix_env, install::install_python, list::list_python_versions, usage::use_python,
+};
 use std::process::exit;
+
+const VERSION: Option<&str> = option_env!("CARGO_PKG_VERSION");
 
 fn help() {
     println!("Usage: vmp <command> [version]
@@ -27,25 +31,30 @@ Examples:
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cmd = std::env::args().nth(1).expect("Not enough args");
+    let version = std::env::args().nth(2);
 
     if cmd == "help" {
         help()
     } else if cmd == "version" {
-        println!("dev");
+        println!("{}", VERSION.unwrap_or("unknown"));
         exit(0);
     } else if cmd == "env" {
         posix_env();
         exit(0)
+    } else if cmd == "list" && version.is_none() {
+        list_python_versions("".to_string()).await?;
     }
 
-    let version = std::env::args().nth(2).expect("Not enough args");
+    if version.is_none() {
+        exit(0)
+    }
 
     if cmd == "install" {
-        install_python(version).await?;
+        install_python(version.unwrap()).await?;
     } else if cmd == "use" {
-        use_python(version).await?;
+        use_python(version.unwrap()).await?;
     } else if cmd == "list" {
-        list_python_versions(version).await?;
+        list_python_versions(version.unwrap()).await?;
     }
 
     Ok(())

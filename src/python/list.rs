@@ -9,7 +9,7 @@ pub async fn list_python_versions(list_type: String) -> Result<(), Box<dyn std::
         for version in versions {
             println!("{}", version);
         }
-    } else if list_type == "installed" {
+    } else if list_type == "installed" || list_type == "" {
         let python_install_path = get_my_home()
             .unwrap()
             .unwrap()
