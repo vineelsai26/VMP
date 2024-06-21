@@ -2,7 +2,7 @@ mod python;
 mod utils;
 
 use python::{
-    env::posix_env, install::install_python, list::list_python_versions, usage::use_python,
+    env::posix_env, install::install_python, list::list_python_versions, usage::use_python, uninstall::uninstall_python
 };
 use std::process::exit;
 
@@ -53,6 +53,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         install_python(version.unwrap()).await?;
     } else if cmd == "use" {
         use_python(version.unwrap()).await?;
+    } else if cmd == "uninstall" {
+        uninstall_python(version.unwrap()).await?;
     } else if cmd == "list" {
         list_python_versions(version.unwrap()).await?;
     }
