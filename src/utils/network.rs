@@ -4,9 +4,9 @@ use std::{cmp::min, fs::File, io::Write};
 
 pub async fn download_file(
     url: String,
-    file_path: String,
+    file_path: &String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let res = reqwest::get(url.clone()).await?;
+    let res = reqwest::get(&url).await?;
 
     let download_size = res.content_length().expect("");
 
@@ -18,7 +18,7 @@ pub async fn download_file(
     );
     pb.set_message("Downloading ".to_string() + &url);
 
-    let mut file = File::create(file_path.clone())
+    let mut file = File::create(file_path)
         .or(Err(format!("Failed to create file '{}'", file_path)))?;
     let mut downloaded: u64 = 0;
     let mut stream = res.bytes_stream();

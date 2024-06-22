@@ -26,7 +26,7 @@ pub async fn use_python(mut version: String) -> Result<(), Box<dyn std::error::E
     }
 
     let vmp_path = get_my_home().unwrap().unwrap().as_path().join(".vmp");
-    let _ = std::fs::create_dir_all(vmp_path.clone());
+    let _ = std::fs::create_dir_all(&vmp_path);
 
     let vmp_python_version = vmp_path
         .join("python_version")
@@ -35,10 +35,10 @@ pub async fn use_python(mut version: String) -> Result<(), Box<dyn std::error::E
         .to_string();
     let mut file = File::create(vmp_python_version)?;
 
-    let vmp_path_python_path = vmp_path.join("python").join(version.clone()).join("bin");
+    let vmp_path_python_path = vmp_path.join("python").join(&version).join("bin");
 
     if vmp_path_python_path.exists() {
-        println!("Using Python Version {:?}", version);
+        println!("Using Python Version {}", version);
         file.write_all(version.as_bytes())?;
     } else {
         println!(
