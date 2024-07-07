@@ -2,7 +2,8 @@ mod python;
 mod utils;
 
 use python::{
-    env::posix_env, install::install_python, list::list_python_versions, usage::use_python, uninstall::uninstall_python
+    env::posix_env, install::install_python, list::list_python_versions,
+    uninstall::uninstall_python, usage::use_python,
 };
 use std::process::exit;
 
@@ -39,10 +40,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", VERSION.unwrap_or("unknown"));
         exit(0);
     } else if cmd == "env" {
-        posix_env();
+        posix_env("".to_string()).await;
         exit(0)
     } else if cmd == "list" && version.is_none() {
-        list_python_versions("".to_string()).await?;
+        let versions = list_python_versions("".to_string()).await?;
+        for version in versions {
+            println!("{}", version);
+        }
     }
 
     if version.is_none() {
@@ -55,8 +59,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         use_python(version.unwrap()).await?;
     } else if cmd == "uninstall" {
         uninstall_python(version.unwrap()).await?;
+    } else if cmd == "env" {
+        posix_env(version.unwrap()).await;
+        exit(0)
     } else if cmd == "list" {
-        list_python_versions(version.unwrap()).await?;
+        let versions = list_python_versions(version.unwrap()).await?;
+        for version in versions {
+            println!("{}", version);
+        }
     }
 
     Ok(())

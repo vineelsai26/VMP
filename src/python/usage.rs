@@ -41,10 +41,10 @@ pub async fn use_python(mut version: String) -> Result<(), Box<dyn std::error::E
         println!("Using Python Version {}", version);
         file.write_all(version.as_bytes())?;
     } else {
-        println!(
+        panic!(
             "Python version {} not installed, please install it with command \n `vmp install {}`",
             version, version
-        )
+        );
     }
 
     Ok(())

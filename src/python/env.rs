@@ -1,6 +1,28 @@
-pub fn posix_env() {
-    let env = r###"
-export PATH="$HOME/.vmp/python/$(cat $HOME/.vmp/python_version)/bin:$PATH"
+use crate::python::list::list_python_versions;
+use homedir::get_my_home;
+
+pub async fn posix_env(env_type: String) {
+    let mut path = "".to_string();
+
+    if env_type == "all" {
+        let versions = list_python_versions("installed".to_string()).await.unwrap();
+        for version in versions {
+            path += get_my_home()
+                .unwrap()
+                .unwrap()
+                .as_path()
+                .join(".vmp")
+                .join("python")
+                .join(version)
+                .join("bin")
+                .to_str()
+                .unwrap();
+            path += ":";
+        }
+    }
+
+    let mut env = r###"
+export PATH="$HOME/.vmp/python/$(cat $HOME/.vmp/python_version)/bin:{PYTHON_PATHS}$PATH"
 
 function vmp {
     $(whereis vmp | cut -d" " -f2) $@
@@ -34,7 +56,9 @@ function cd {
 }
 
 setPythonVersion
-"###;
+"###.to_string();
+
+    env = env.replace("{PYTHON_PATHS}", &path);
 
     println!("{}", env);
 }

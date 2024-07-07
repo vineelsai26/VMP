@@ -38,7 +38,7 @@ pub async fn uninstall_python(mut version: String) -> Result<(), Box<dyn std::er
         remove_dir_all(python_path)?;
         println!("Uninstall for python version {} is successfull", version)
     } else {
-        println!("Python version {} is not installed", version)
+        panic!("Python version {} is not installed", version)
     }
 
     Ok(())
