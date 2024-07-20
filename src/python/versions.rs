@@ -33,10 +33,11 @@ pub async fn fetch_available_versions() -> Result<Vec<String>, Box<dyn std::erro
 }
 
 pub async fn get_latest_minor_of_version(
-    major: String,
+    mut major: String,
     minor: String,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let versions = fetch_available_versions().await?;
+    major = major.replace("v", "");
 
     for version in versions {
         let version_vec = version.split(".").filter(|&i| i != "").collect::<Vec<_>>();
