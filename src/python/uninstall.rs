@@ -16,9 +16,7 @@ pub async fn uninstall_python(mut version: String) -> Result<(), Box<dyn std::er
             version_string[1].to_string(),
         )
         .await?;
-    } else if version_string.len() == 3 {
-        version = version
-    } else {
+    } else if version_string.len() != 3 {
         panic!("error invalid version number")
     }
 
