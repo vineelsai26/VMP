@@ -9,7 +9,7 @@ pub async fn list_python_versions(
     let mut versions = Vec::new();
     if list_type == "all" {
         versions = fetch_available_versions().await?;
-    } else if list_type == "installed" || list_type == "" {
+    } else if list_type == "installed" || list_type.is_empty() {
         let python_install_path = get_my_home()
             .unwrap()
             .unwrap()

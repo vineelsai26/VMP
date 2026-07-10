@@ -1,5 +1,5 @@
 use homedir::get_my_home;
-use std::{path::Path, process::Command};
+use std::{io, path::Path, process::Command};
 
 use crate::{
     python::versions::get_latest_minor_of_version,
@@ -8,7 +8,10 @@ use crate::{
 
 pub async fn install_python(mut version: String) -> Result<(), Box<dyn std::error::Error>> {
     version = version.replace("v", "");
-    let version_string = version.split(".").filter(|&i| i != "").collect::<Vec<_>>();
+    let version_string = version
+        .split('.')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
 
     if version_string.len() == 1 {
         version =
@@ -20,7 +23,7 @@ pub async fn install_python(mut version: String) -> Result<(), Box<dyn std::erro
         )
         .await?;
     } else if version_string.len() != 3 {
-        panic!("error invalid version number")
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid version number").into());
     }
 
     if !version.contains("v") {
@@ -56,11 +59,6 @@ pub async fn install_python(mut version: String) -> Result<(), Box<dyn std::erro
         .unwrap()
         .to_string();
 
-    let build_args = format!(
-        "--prefix={} --enable-optimizations && make && make altinstall",
-        install_path
-    );
-
     println!("Installing Python Version {} at {}", version, extract_path);
 
     let vmp_python_bin_path = vmp_path.join("python").join(&version).join("bin");
@@ -79,20 +77,37 @@ pub async fn install_python(mut version: String) -> Result<(), Box<dyn std::erro
             )
         }
 
-        let _ = std::fs::create_dir_all(&extract_path);
-        let _ = extract_tar_gz(
-            file_path,
-            &extract_path,
-            file_name.replace(".tgz", ""),
-        );
+        extract_tar_gz(file_path, &extract_path, file_name.replace(".tgz", ""))?;
 
-        let _ = Command::new("bash")
-            .arg("-c")
-            .arg(format!("cd {} && ./configure {}", extract_path, build_args))
-            .spawn()
-            .unwrap()
-            .wait();
+        run_build_step(
+            Command::new("./configure")
+                .current_dir(&extract_path)
+                .arg(format!("--prefix={install_path}"))
+                .arg("--enable-optimizations"),
+            "configure Python",
+        )?;
+        run_build_step(
+            Command::new("make").current_dir(&extract_path),
+            "build Python",
+        )?;
+        run_build_step(
+            Command::new("make")
+                .current_dir(&extract_path)
+                .arg("altinstall"),
+            "install Python",
+        )?;
     }
 
     Ok(())
+}
+
+fn run_build_step(command: &mut Command, description: &str) -> io::Result<()> {
+    let status = command.status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(format!(
+            "failed to {description}: process exited with {status}"
+        )))
+    }
 }

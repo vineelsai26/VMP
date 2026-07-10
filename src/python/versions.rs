@@ -29,7 +29,7 @@ pub async fn fetch_available_versions() -> Result<Vec<String>, Box<dyn std::erro
 
     versions.reverse();
 
-    return Ok(versions);
+    Ok(versions)
 }
 
 pub async fn get_latest_minor_of_version(
@@ -40,7 +40,10 @@ pub async fn get_latest_minor_of_version(
     major = major.replace("v", "");
 
     for version in versions {
-        let version_vec = version.split(".").filter(|&i| i != "").collect::<Vec<_>>();
+        let version_vec = version
+            .split('.')
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>();
 
         if version_vec[0] == "v".to_string() + &major && version_vec[1] == minor {
             return Ok(version);

@@ -5,7 +5,10 @@ use crate::python::versions::get_latest_minor_of_version;
 
 pub async fn uninstall_python(mut version: String) -> Result<(), Box<dyn std::error::Error>> {
     version = version.replace("v", "");
-    let version_string = version.split(".").filter(|&i| i != "").collect::<Vec<_>>();
+    let version_string = version
+        .split('.')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
 
     if version_string.len() == 1 {
         version =
