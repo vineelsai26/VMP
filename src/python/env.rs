@@ -1,22 +1,15 @@
 use crate::python::list::list_python_versions;
-use homedir::get_my_home;
+use crate::utils::paths::vmp_dir;
 
-pub async fn posix_env(env_type: String) {
+pub async fn posix_env(env_type: String) -> Result<(), Box<dyn std::error::Error>> {
     let mut path = "".to_string();
 
     if env_type == "all" {
-        let versions = list_python_versions("installed".to_string()).await.unwrap();
+        let versions = list_python_versions("installed".to_string()).await?;
+        let python_root = vmp_dir()?.join("python");
         for version in versions {
-            path += get_my_home()
-                .unwrap()
-                .unwrap()
-                .as_path()
-                .join(".vmp")
-                .join("python")
-                .join(version)
-                .join("bin")
-                .to_str()
-                .unwrap();
+            let bin = python_root.join(version).join("bin");
+            path += &bin.to_string_lossy();
             path += ":";
         }
     }
@@ -61,4 +54,6 @@ setPythonVersion
     env = env.replace("{PYTHON_PATHS}", &path);
 
     println!("{}", env);
+
+    Ok(())
 }

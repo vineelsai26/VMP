@@ -1,4 +1,3 @@
-use homedir::get_my_home;
 use sigstore_verify::{
     trust_root::{TrustedRoot, SIGSTORE_PRODUCTION_TRUSTED_ROOT},
     types::Bundle,
@@ -7,33 +6,12 @@ use sigstore_verify::{
 use std::{io, path::Path, process::Command};
 
 use crate::{
-    python::versions::get_latest_minor_of_version,
-    utils::{archive::extract_tar_gz, network::download_file},
+    python::versions::resolve_version,
+    utils::{archive::extract_tar_gz_from_reader, network::download_file, paths::vmp_dir},
 };
 
-pub async fn install_python(mut version: String) -> Result<(), Box<dyn std::error::Error>> {
-    version = version.replace("v", "");
-    let version_string = version
-        .split('.')
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>();
-
-    if version_string.len() == 1 {
-        version =
-            get_latest_minor_of_version(version_string[0].to_string(), "".to_string()).await?;
-    } else if version_string.len() == 2 {
-        version = get_latest_minor_of_version(
-            version_string[0].to_string(),
-            version_string[1].to_string(),
-        )
-        .await?;
-    } else if version_string.len() != 3 {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid version number").into());
-    }
-
-    if !version.contains("v") {
-        version = "v".to_owned() + &version
-    }
+pub async fn install_python(version: String) -> Result<(), Box<dyn std::error::Error>> {
+    let version = resolve_version(&version).await?;
 
     let url = "https://www.python.org/ftp/python/".to_owned()
         + &version.replace("v", "")
@@ -41,7 +19,7 @@ pub async fn install_python(mut version: String) -> Result<(), Box<dyn std::erro
         + &version.replace("v", "")
         + ".tgz";
 
-    let vmp_path = get_my_home().unwrap().unwrap().as_path().join(".vmp");
+    let vmp_path = vmp_dir()?;
     let download_cache_path = vmp_path.join("cache");
     let _ = std::fs::create_dir_all(&download_cache_path);
     let file_name = url.split("/").last().unwrap().to_string();
@@ -87,9 +65,17 @@ pub async fn install_python(mut version: String) -> Result<(), Box<dyn std::erro
             println!("Downloading Python Sigstore bundle from {}", bundle_url);
             download_file(bundle_url, &bundle_path).await?;
         }
-        verify_python_release(&version, &file_path, &bundle_path)?;
+        // Read the artifact exactly once, verify those bytes, then extract the
+        // same in-memory bytes so a concurrent writer to the cache cannot swap a
+        // malicious archive in between verification and extraction (verify/use
+        // TOCTOU).
+        let artifact = verify_python_release(&version, &file_path, &bundle_path)?;
 
-        extract_tar_gz(file_path, &extract_path, file_name.replace(".tgz", ""))?;
+        extract_tar_gz_from_reader(
+            io::Cursor::new(artifact),
+            &extract_path,
+            file_name.replace(".tgz", ""),
+        )?;
 
         run_build_step(
             Command::new("./configure")
@@ -113,11 +99,14 @@ pub async fn install_python(mut version: String) -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
+/// Verify the cached artifact against its Sigstore bundle and return the exact
+/// verified bytes so the caller can extract those bytes directly, rather than
+/// re-reading the file from disk.
 fn verify_python_release(
     version: &str,
     artifact_path: &str,
     bundle_path: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let (identity, issuer) = python_release_identity(version)?;
     let artifact = std::fs::read(artifact_path)?;
     let bundle_json = std::fs::read_to_string(bundle_path)?;
@@ -132,7 +121,7 @@ fn verify_python_release(
         ))
     })?;
     println!("Verified Python {} Sigstore identity {}", version, identity);
-    Ok(())
+    Ok(artifact)
 }
 
 fn python_release_identity(version: &str) -> Result<(&'static str, &'static str), io::Error> {

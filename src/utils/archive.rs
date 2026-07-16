@@ -7,6 +7,20 @@ use std::{
 use tar::Archive;
 
 pub fn extract_tar_gz(source: String, dest: &String, prefix: String) -> io::Result<()> {
+    let tar_gz = File::open(source)?;
+    extract_tar_gz_from_reader(tar_gz, dest, prefix)
+}
+
+/// Extract a gzip-compressed tar archive from an already-open reader.
+///
+/// Callers that must not re-read the archive from disk between verification and
+/// extraction (to avoid a TOCTOU swap) pass the verified bytes in directly,
+/// e.g. via `io::Cursor`.
+pub fn extract_tar_gz_from_reader<R: io::Read>(
+    reader: R,
+    dest: &String,
+    prefix: String,
+) -> io::Result<()> {
     let destination = Path::new(dest);
     let prefix = Path::new(&prefix);
     validate_prefix(prefix)?;
@@ -16,8 +30,7 @@ pub fn extract_tar_gz(source: String, dest: &String, prefix: String) -> io::Resu
     let staging = create_staging_dir(parent)?;
 
     let result = (|| {
-        let tar_gz = File::open(source)?;
-        let mut archive = Archive::new(GzDecoder::new(tar_gz));
+        let mut archive = Archive::new(GzDecoder::new(reader));
 
         for entry in archive.entries()? {
             let mut entry = entry?;
